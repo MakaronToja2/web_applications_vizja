@@ -12,40 +12,65 @@ Watchdog to system monitorowania dostępności serwerów. Składa się z:
 
 ## Diagram architektury
 
+```mermaid
+graph TD
+    subgraph Monitorowane serwery
+        A1[Agent TCP #1<br/>klient socket]
+        A2[Agent TCP #2<br/>klient socket]
+        A3[Agent TCP #N<br/>klient socket]
+    end
+
+    subgraph "Serwer TCP :9000"
+        TS[Serwer TCP<br/>Python socket<br/>— odbiera heartbeaty<br/>— wykrywa awarie]
+    end
+
+    subgraph "Message Broker :5672"
+        RMQ[RabbitMQ<br/>Exchange: monitor.events<br/>topic exchange]
+    end
+
+    subgraph "REST API :8080"
+        API[FastAPI + HTTPS<br/>— CRUD serwerów<br/>— historia heartbeatów<br/>— statystyki]
+        DB[(SQLite<br/>servers / heartbeats / incidents)]
+    end
+
+    subgraph "Alert Worker :8765"
+        AW[Konsumer RabbitMQ<br/>+ Serwer WebSocket<br/>— przetwarza alerty<br/>— broadcast do klientów]
+    end
+
+    subgraph "Frontend :3000"
+        DASH[Dashboard<br/>Nginx + HTML/JS<br/>— lista serwerów<br/>— alerty real-time]
+    end
+
+    A1 -- "HEARTBEAT|id|ts|cpu|mem|status<br/>TCP :9000" --> TS
+    A2 -- "TCP heartbeat" --> TS
+    A3 -- "TCP heartbeat" --> TS
+    TS -- "ACK|id" --> A1
+    TS -- "ACK" --> A2
+    TS -- "ACK" --> A3
+
+    TS -- "server.heartbeat<br/>server.down<br/>server.up<br/>AMQP" --> RMQ
+
+    RMQ -- "api_heartbeat_queue<br/>server.heartbeat / .down / .up" --> API
+    RMQ -- "alert_queue<br/>server.down / .up / .heartbeat" --> AW
+
+    API --> DB
+    API -- "HTTPS GET/POST<br/>JSON" --> DASH
+    AW -- "WebSocket ws://<br/>JSON alerts" --> DASH
+
+    style RMQ fill:#ff6d00,color:#fff
+    style API fill:#1565c0,color:#fff
+    style AW fill:#6a1b9a,color:#fff
+    style TS fill:#2e7d32,color:#fff
+    style DASH fill:#37474f,color:#fff
+    style DB fill:#1565c0,color:#fff
 ```
-┌─────────────┐    TCP heartbeat     ┌──────────────────┐
-│  Agent TCP   │ ──────────────────► │   Serwer TCP     │
-│  (klient)    │    port 9000        │                  │
-│              │ ◄────────────────── │  Odbiera hearbeaty│
-└─────────────┘    ACK               │  Wykrywa awarie  │
-                                     └───────┬──────────┘
-                                             │
-                                             │ publikuje zdarzenia
-                                             ▼
-                                     ┌──────────────────┐
-                                     │    RabbitMQ       │
-                                     │  (message broker) │
-                                     └──┬───────────┬───┘
-                                        │           │
-                           konsumuje    │           │  konsumuje
-                           alerty       │           │  heartbeaty
-                                        ▼           ▼
-┌─────────────────────┐        ┌──────────────────────────┐
-│  Alert Worker        │        │  REST API (FastAPI)       │
-│                      │        │                           │
-│  - przetwarza alerty │        │  - CRUD serwerów          │
-│  - WebSocket server  │        │  - historia heartbeatów   │
-│    (port 8765)       │        │  - statystyki             │
-└──────────┬───────────┘        │  - HTTPS (port 8080)      │
-           │                    └──────────────┬────────────┘
-           │ WebSocket                         │ HTTPS
-           ▼                                   ▼
-┌──────────────────────────────────────────────────┐
-│              Dashboard (przeglądarka)              │
-│  - lista serwerów (REST API)                      │
-│  - alerty w czasie rzeczywistym (WebSocket)       │
-└──────────────────────────────────────────────────┘
-```
+
+### Wymagania rozszerzające (zrealizowane 2 z min. 1)
+
+| Wymaganie | Realizacja |
+|-----------|-----------|
+| **Message Queue** | RabbitMQ — asynchroniczna komunikacja między Serwerem TCP, REST API i Alert Workerem |
+| **WebSocket** | Serwer WebSocket w Alert Worker — powiadomienia real-time do dashboardu |
 
 ## Użyte technologie
 
