@@ -16,7 +16,7 @@ docker compose up
 
 | Usługa | Port | URL |
 |--------|------|-----|
-| REST API (HTTPS) | 8443 | https://localhost:8443/docs |
+| REST API (HTTPS) | 8080 | https://localhost:8080/docs |
 | Serwer TCP (heartbeat) | 9000 | — |
 | WebSocket (alerty) | 8765 | ws://localhost:8765 |
 | Dashboard | 3000 | http://localhost:3000 |

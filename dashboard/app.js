@@ -1,6 +1,6 @@
 // Dashboard — fetches servers from REST API and listens for WebSocket alerts
 
-const API_URL = "https://localhost:8443/api";
+const API_URL = "https://localhost:8080/api";
 const WS_URL = "ws://localhost:8765";
 
 // Fetch server list from REST API

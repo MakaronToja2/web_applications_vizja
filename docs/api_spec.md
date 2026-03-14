@@ -1,8 +1,8 @@
 # Specyfikacja REST API
 
-Bazowy URL: `https://localhost:8443`
+Bazowy URL: `https://localhost:8080`
 
-Interaktywna dokumentacja (Swagger): `https://localhost:8443/docs`
+Interaktywna dokumentacja (Swagger): `https://localhost:8080/docs`
 
 ## Endpointy
 

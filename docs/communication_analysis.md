@@ -30,7 +30,7 @@
 | Port | Protokół | Usługa | Stanowy? | Warstwa |
 |------|----------|--------|----------|---------|
 | 9000 | TCP (własny protokół) | Serwer heartbeat | Tak | Transportowa + Aplikacji |
-| 8443 | HTTPS (HTTP + TLS) | REST API | Nie | Aplikacji |
+| 8080 | HTTPS (HTTP + TLS) | REST API | Nie | Aplikacji |
 | 8765 | WebSocket (WS) | Serwer alertów | Tak | Aplikacji |
 | 5672 | AMQP | RabbitMQ (broker) | Tak | Aplikacji |
 | 15672 | HTTP | RabbitMQ panel zarządzania | Nie | Aplikacji |

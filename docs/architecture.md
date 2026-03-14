@@ -36,7 +36,7 @@ Watchdog to system monitorowania dostępności serwerów. Składa się z:
 │  - przetwarza alerty │        │  - CRUD serwerów          │
 │  - WebSocket server  │        │  - historia heartbeatów   │
 │    (port 8765)       │        │  - statystyki             │
-└──────────┬───────────┘        │  - HTTPS (port 8443)      │
+└──────────┬───────────┘        │  - HTTPS (port 8080)      │
            │                    └──────────────┬────────────┘
            │ WebSocket                         │ HTTPS
            ▼                                   ▼
