@@ -58,6 +58,8 @@ app.add_middleware(
 # --- GraphQL ---
 from gql.schema import graphql_router
 from gql.alert_engine import evaluate_rules
+from gql.subscriptions import publish_status_change
+from gql.types import ServerType
 
 app.include_router(graphql_router, prefix="/graphql")
 
@@ -93,6 +95,18 @@ async def receive_heartbeat(payload: HeartbeatPayload, db: Session = Depends(get
 
     await evaluate_rules(payload.server_id, payload.cpu, payload.mem, "UP", db)
 
+    # Push live heartbeat data to WebSocket subscribers
+    await publish_status_change(ServerType(
+        id=server.id,
+        server_id=server.server_id,
+        name=server.name,
+        status="UP",
+        cpu=payload.cpu,
+        mem=payload.mem,
+        last_heartbeat=now,
+        created_at=server.created_at,
+    ))
+
     return {"ok": True}
 
 
@@ -118,5 +132,17 @@ async def receive_status_change(payload: StatusPayload, db: Session = Depends(ge
     db.commit()
 
     await evaluate_rules(payload.server_id, server.cpu or 0, server.mem or 0, payload.status, db)
+
+    # Push status change to WebSocket subscribers
+    await publish_status_change(ServerType(
+        id=server.id,
+        server_id=server.server_id,
+        name=server.name,
+        status=payload.status,
+        cpu=server.cpu,
+        mem=server.mem,
+        last_heartbeat=server.last_heartbeat,
+        created_at=server.created_at,
+    ))
 
     return {"ok": True}

@@ -15,7 +15,7 @@ Watchdog to system monitorowania dostępności serwerów. Składa się z:
 ```mermaid
 graph TD
     subgraph "Monitorowane serwery"
-        A1["Agent TCP #1<br/>klient socket"]
+        A1["Agent TCP #1<br/>klient socket"]y
         A2["Agent TCP #2<br/>klient socket"]
         A3["Agent TCP #N<br/>klient socket"]
     end
@@ -82,9 +82,10 @@ graph TD
 2. **Serwer TCP** odpowiada `ACK`, parsuje dane i wywołuje `POST /api/heartbeat` na **REST API** (HTTPS)
 3. Jeśli agent nie wysyła heartbeata przez 30s → Serwer TCP wywołuje `POST /api/status` z `status=DOWN`
 4. **REST API** zapisuje dane do **SQLite** i uruchamia **silnik alertów** — sprawdza reguły użytkownika
-5. Jeśli reguła jest spełniona (np. CPU > 90%) → tworzony jest alert i emitowany przez **GraphQL Subscription**
-6. **Dashboard** subskrybuje alerty przez **GraphQL Subscription** (WebSocket) — dostaje je natychmiast
-7. **Dashboard** odpytuje dane o serwerach i regułach przez **GraphQL query/mutation** (HTTPS)
+5. Jeśli reguła jest spełniona (np. CPU > 90%) → tworzony jest alert i emitowany przez **GraphQL Subscription** (WebSocket)
+6. Przy każdym heartbeatcie i zmianie statusu → aktualizacja serwera pushowana przez **GraphQL Subscription** do dashboardu
+7. **Dashboard** przy załadowaniu pobiera dane przez **GraphQL query** (HTTPS), potem wszystkie aktualizacje przychodzą przez **WebSocket** — bez pollingu
+8. Użytkownik zarządza regułami alertów przez **GraphQL mutation** (HTTPS)
 
 ## Struktura projektu
 

@@ -16,14 +16,14 @@
 | Połączenie | Opis |
 |-----------|------|
 | **TCP heartbeat** (Agent ↔ Serwer TCP) | Utrzymywane połączenie TCP — serwer śledzi stan każdego agenta (ostatni heartbeat, czy żyje). Zerwanie połączenia = potencjalna awaria. |
-| **GraphQL Subscription** (API ↔ Dashboard) | Utrzymywane połączenie WebSocket — serwer przechowuje listę subskrybentów i pushuje do nich eventy o zmianach statusu i alertach w czasie rzeczywistym. |
+| **GraphQL Subscription** (API ↔ Dashboard) | Utrzymywane połączenie WebSocket — serwer pushuje do dashboardu: aktualizacje metryk (CPU/RAM) przy każdym heartbeatcie, zmiany statusu (UP/DOWN), nowe alerty. Dashboard nie używa pollingu — wszystkie dane na żywo przychodzą przez WebSocket. |
 
 ### Komunikacja bezstanowa (stateless)
 
 | Połączenie | Opis |
 |-----------|------|
 | **HTTP REST API** (Serwer TCP → API) | Każde żądanie HTTP jest niezależne — serwer TCP wywołuje `POST /api/heartbeat` per heartbeat. |
-| **GraphQL Query/Mutation** (Dashboard → API) | Pojedyncze zapytania HTTPS — każde niezależne. Dashboard pyta o listę serwerów, tworzy reguły alertów. |
+| **GraphQL Query/Mutation** (Dashboard → API) | Pojedyncze zapytania HTTPS — każde niezależne. Używane przy załadowaniu strony (inicjalne pobranie danych) oraz do operacji zapisu (tworzenie/usuwanie reguł alertów, usuwanie serwerów). Po załadowaniu strony dalsze aktualizacje przychodzą przez WebSocket. |
 
 ## Porty i protokoły
 

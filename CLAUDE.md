@@ -22,7 +22,7 @@ Dashboard ← GraphQL queries + GraphQL Subscriptions (WebSocket)
 |--------|------|
 | `tcp_server/`, `tcp_agent/` | Serwer i klient TCP (sockety), wywołania REST API |
 | `api/` | REST API (FastAPI) + HTTPS + SQLite + modele bazodanowe |
-| `api/graphql/` | GraphQL schema (Strawberry) — queries, mutations, subscriptions + silnik alertów |
+| `api/gql/` | GraphQL schema (Strawberry) — queries, mutations, subscriptions + silnik alertów |
 | `dashboard/` | Panel webowy (GraphQL + WebSocket) |
 | `docs/` | Dokumentacja architektury |
 
@@ -65,21 +65,25 @@ Serwer → Klient:  ACK|<server_id>\n
 - Endpoint: `/graphql` (HTTPS)
 - Playground: `https://localhost:8080/graphql` (GraphiQL)
 - Queries: `servers`, `server(id)`, `alertRules`, `alerts`, `stats`
-- Mutations: `createAlertRule`, `deleteAlertRule`, `toggleAlertRule`
+- Mutations: `createAlertRule`, `deleteAlertRule`, `toggleAlertRule`, `deleteServer`, `clearAlerts`
 - Subscriptions: `alertTriggered`, `serverStatusChanged` — real-time przez WebSocket
 
 ## Silnik alertów
 
 Użytkownik definiuje reguły (np. "CPU > 90%", "status == DOWN"). Przy każdym heartbeatcie reguły są ewaluowane. Jeśli spełnione → alert zapisany w DB + push przez GraphQL Subscription.
 
-## Pliki z TODO dla kolegów
+## Real-time (WebSocket)
 
-- `tcp_server/server.py`, `tcp_agent/agent.py` — szkielet z TODO dla Osoby 1
-- `api/graphql/` — przewodnik w `docs/person3_guide.md` dla Osoby 3
+Dashboard nie używa pollingu — po załadowaniu strony łączy się przez GraphQL Subscription (WebSocket) i otrzymuje:
+- Aktualizacje metryk (CPU/RAM) przy każdym heartbeatcie (co ~10s)
+- Zmiany statusu serwerów (UP/DOWN) natychmiast
+- Nowe alerty natychmiast
+
+GraphQL query/mutation używane są tylko do: inicjalnego załadowania danych, tworzenia/usuwania reguł, usuwania serwerów.
 
 ## Ważne
 
-- API (folder `api/`) — endpointy REST są zaimplementowane
-- Warstwa GraphQL (`api/graphql/`) i dashboard do zaimplementowania
+- REST API (`POST /api/heartbeat`, `POST /api/status`) — tylko zapis danych z serwera TCP
+- GraphQL — wszystkie operacje odczytu i zarządzania (dashboard)
 - Nie ma RabbitMQ — Serwer TCP komunikuje się z API bezpośrednio przez HTTPS
 - Nie commitować folderu `certs/` (jest w .gitignore)

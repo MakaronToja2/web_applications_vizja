@@ -16,6 +16,20 @@ async function gqlQuery(query, variables = {}) {
     return json.data;
 }
 
+// --- Server state (updated via WebSocket) ---
+
+let serverCache = [];
+
+function updateServerFromWS(update) {
+    const idx = serverCache.findIndex(s => s.serverId === update.serverId);
+    if (idx >= 0) {
+        serverCache[idx] = { ...serverCache[idx], ...update };
+    } else {
+        serverCache.push(update);
+    }
+    renderServers(serverCache);
+}
+
 // --- Fetch & render servers ---
 
 async function fetchServers() {
@@ -25,7 +39,8 @@ async function fetchServers() {
                 serverId name status cpu mem lastHeartbeat
             }
         }`);
-        renderServers(data.servers);
+        serverCache = data.servers;
+        renderServers(serverCache);
     } catch (err) {
         document.getElementById("server-list").textContent =
             "Nie można połączyć z API";
@@ -241,7 +256,7 @@ function connectSubscription() {
             }
 
             if (data.serverStatusChanged) {
-                fetchServers();
+                updateServerFromWS(data.serverStatusChanged);
                 fetchStats();
             }
         }
@@ -278,5 +293,4 @@ fetchRules();
 fetchAlerts();
 connectSubscription();
 
-// Refresh data periodically as fallback
-setInterval(() => { fetchServers(); fetchStats(); }, 30000);
+// No polling — all updates come via WebSocket subscriptions
