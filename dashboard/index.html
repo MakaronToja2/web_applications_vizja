@@ -9,17 +9,47 @@
 <body>
     <header>
         <h1>Watchdog — Panel Monitoringu</h1>
+        <div id="stats"></div>
     </header>
 
     <main>
-        <section id="alerts">
-            <h2>Alerty (WebSocket)</h2>
-            <div id="alert-list"></div>
-        </section>
+        <div class="grid">
+            <section id="servers-section">
+                <h2>Serwery</h2>
+                <div id="server-list">Ładowanie...</div>
+            </section>
 
-        <section id="servers">
-            <h2>Serwery</h2>
-            <div id="server-list">Ładowanie...</div>
+            <section id="alerts-section">
+                <h2>
+                Alerty na żywo <span class="ws-badge" id="ws-status">rozłączony</span>
+                <button class="clear-btn" onclick="clearAlerts()">Wyczyść</button>
+            </h2>
+                <div id="alert-list"></div>
+            </section>
+        </div>
+
+        <section id="rules-section">
+            <h2>Reguły alertów</h2>
+            <form id="rule-form">
+                <input type="text" id="rule-name" placeholder="Nazwa reguły" required>
+                <select id="rule-metric">
+                    <option value="cpu">CPU %</option>
+                    <option value="mem">RAM %</option>
+                    <option value="status">Status (0=DOWN, 1=UP)</option>
+                </select>
+                <select id="rule-operator">
+                    <option value=">">&gt;</option>
+                    <option value="<">&lt;</option>
+                    <option value=">=">&gt;=</option>
+                    <option value="<=">&lt;=</option>
+                    <option value="==">==</option>
+                    <option value="!=">!=</option>
+                </select>
+                <input type="number" id="rule-threshold" placeholder="Próg" step="0.1" required>
+                <input type="text" id="rule-server" placeholder="Server ID (opcjonalne)">
+                <button type="submit">Dodaj regułę</button>
+            </form>
+            <div id="rule-list"></div>
         </section>
     </main>
 

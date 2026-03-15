@@ -9,41 +9,71 @@ body {
     background: #0f172a;
     color: #e2e8f0;
     padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
 }
 
 header h1 {
     font-size: 1.5rem;
-    margin-bottom: 2rem;
     color: #38bdf8;
 }
 
-section {
+#stats {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.85rem;
+}
+
+.stat-box {
+    background: #1e293b;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+}
+
+.stat-box .value {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
     margin-bottom: 2rem;
 }
+
+section { margin-bottom: 1.5rem; }
 
 h2 {
     font-size: 1.1rem;
     margin-bottom: 1rem;
     color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
-.alert-item {
-    padding: 0.75rem 1rem;
-    margin-bottom: 0.5rem;
-    border-radius: 0.5rem;
-    font-size: 0.9rem;
-}
-
-.alert-item.down {
+.ws-badge {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 1rem;
     background: #991b1b;
-    border-left: 4px solid #ef4444;
+    color: #ef4444;
 }
 
-.alert-item.up {
+.ws-badge.connected {
     background: #166534;
-    border-left: 4px solid #22c55e;
+    color: #22c55e;
 }
 
+/* Server cards */
 .server-card {
     background: #1e293b;
     padding: 1rem;
@@ -53,6 +83,10 @@ h2 {
     justify-content: space-between;
     align-items: center;
 }
+
+.server-info { display: flex; flex-direction: column; gap: 0.25rem; }
+.server-id { font-weight: 600; }
+.server-metrics { font-size: 0.8rem; color: #64748b; }
 
 .status {
     padding: 0.25rem 0.75rem;
@@ -64,3 +98,130 @@ h2 {
 .status.up { background: #166534; color: #22c55e; }
 .status.down { background: #991b1b; color: #ef4444; }
 .status.unknown { background: #44403c; color: #a8a29e; }
+
+/* Alerts */
+.alert-item {
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+    border-radius: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.alert-item.triggered {
+    background: #991b1b;
+    border-left: 4px solid #ef4444;
+}
+
+.alert-item.info {
+    background: #1e3a5f;
+    border-left: 4px solid #38bdf8;
+}
+
+/* Rules */
+#rule-form {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+#rule-form input, #rule-form select {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #e2e8f0;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.85rem;
+}
+
+#rule-form input:focus, #rule-form select:focus {
+    outline: none;
+    border-color: #38bdf8;
+}
+
+#rule-form button {
+    background: #38bdf8;
+    color: #0f172a;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+#rule-form button:hover { background: #7dd3fc; }
+
+.rule-card {
+    background: #1e293b;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+    border-radius: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rule-info { font-size: 0.85rem; }
+.rule-condition { color: #38bdf8; font-family: monospace; }
+.rule-actions { display: flex; gap: 0.5rem; }
+
+.rule-actions button {
+    background: none;
+    border: 1px solid #475569;
+    color: #94a3b8;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.rule-actions button:hover { border-color: #e2e8f0; color: #e2e8f0; }
+.rule-actions button.delete:hover { border-color: #ef4444; color: #ef4444; }
+.rule-disabled { opacity: 0.5; }
+
+/* Delete & clear buttons */
+.server-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.delete-btn {
+    background: none;
+    border: 1px solid #475569;
+    color: #64748b;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.delete-btn:hover {
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+.clear-btn {
+    background: none;
+    border: 1px solid #475569;
+    color: #94a3b8;
+    padding: 0.15rem 0.5rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    font-size: 0.7rem;
+    margin-left: auto;
+}
+
+.clear-btn:hover {
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+@media (max-width: 768px) {
+    .grid { grid-template-columns: 1fr; }
+    #rule-form { flex-direction: column; }
+}
