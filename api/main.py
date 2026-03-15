@@ -1,11 +1,11 @@
 """
-REST API — Person 2
+REST API — Watchdog
 
 FastAPI application serving the Watchdog monitoring API over HTTPS.
-Provides CRUD for servers and exposes heartbeat history and stats.
+Provides CRUD for servers, heartbeat ingestion, and status updates.
+GraphQL (Strawberry) is mounted at /graphql by TODO.
 """
 
-import threading
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -17,7 +17,6 @@ from sqlalchemy import func
 
 from database import engine, get_db, Base
 from models import Server, Heartbeat, Incident
-from consumer import start_consumer
 
 
 # --- Pydantic schemas ---
@@ -39,6 +38,19 @@ class ServerResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class HeartbeatPayload(BaseModel):
+    server_id: str
+    cpu: float
+    mem: float
+    status: str = "OK"
+    timestamp: str | None = None
+
+
+class StatusPayload(BaseModel):
+    server_id: str
+    status: str  # "DOWN" or "UP"
 
 
 class HeartbeatResponse(BaseModel):
@@ -75,11 +87,7 @@ class StatsResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables
     Base.metadata.create_all(bind=engine)
-    # Start RabbitMQ consumer in background thread
-    consumer_thread = threading.Thread(target=start_consumer, daemon=True)
-    consumer_thread.start()
     yield
 
 
@@ -97,8 +105,77 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- GraphQL (TODO mounts this) ---
+# Uncomment when TODO creates api/graphql/schema.py:
+# from graphql.schema import graphql_router
+# app.include_router(graphql_router, prefix="/graphql")
 
-# --- Endpoints ---
+
+# --- Endpoints: data ingestion (used by TCP Server) ---
+
+@app.post("/api/heartbeat")
+def receive_heartbeat(payload: HeartbeatPayload, db: Session = Depends(get_db)):
+    """Receive heartbeat from TCP server. Auto-registers unknown servers."""
+    now = datetime.utcnow()
+
+    # Upsert server
+    server = db.query(Server).filter(Server.server_id == payload.server_id).first()
+    if not server:
+        server = Server(server_id=payload.server_id, name=payload.server_id)
+        db.add(server)
+
+    server.status = "UP"
+    server.last_heartbeat = now
+    server.cpu = payload.cpu
+    server.mem = payload.mem
+
+    # Record heartbeat
+    heartbeat = Heartbeat(
+        server_id=payload.server_id,
+        cpu=payload.cpu,
+        mem=payload.mem,
+        status=payload.status,
+        timestamp=now,
+    )
+    db.add(heartbeat)
+    db.commit()
+
+    # TODO: TODO — call alert engine here
+    # from graphql.alert_engine import evaluate_rules
+    # evaluate_rules(payload.server_id, payload.cpu, payload.mem, "UP", db)
+
+    return {"ok": True}
+
+
+@app.post("/api/status")
+def receive_status_change(payload: StatusPayload, db: Session = Depends(get_db)):
+    """Receive status change (DOWN/UP) from TCP server."""
+    now = datetime.utcnow()
+
+    server = db.query(Server).filter(Server.server_id == payload.server_id).first()
+    if not server:
+        server = Server(server_id=payload.server_id, name=payload.server_id)
+        db.add(server)
+
+    server.status = payload.status
+
+    # Record incident
+    incident = Incident(
+        server_id=payload.server_id,
+        event_type=payload.status,
+        timestamp=now,
+    )
+    db.add(incident)
+    db.commit()
+
+    # TODO: TODO — call alert engine / emit subscription event here
+    # from graphql.alert_engine import evaluate_rules
+    # evaluate_rules(payload.server_id, server.cpu or 0, server.mem or 0, payload.status, db)
+
+    return {"ok": True}
+
+
+# --- Endpoints: CRUD (used by dashboard / external clients) ---
 
 @app.post("/api/servers", response_model=ServerResponse, status_code=201)
 def register_server(server: ServerCreate, db: Session = Depends(get_db)):

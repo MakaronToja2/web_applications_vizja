@@ -1,29 +1,13 @@
 services:
-  # --- Infrastructure ---
-  rabbitmq:
-    image: rabbitmq:3-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      - RABBITMQ_DEFAULT_USER=guest
-      - RABBITMQ_DEFAULT_PASS=guest
-    healthcheck:
-      test: rabbitmq-diagnostics -q ping
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # --- Person 1: TCP layer ---
+  # --- TCP layer ---
   tcp-server:
     build: ./tcp_server
     ports:
       - "9000:9000"
     depends_on:
-      rabbitmq:
-        condition: service_healthy
+      - api
     environment:
-      - RABBITMQ_HOST=rabbitmq
+      - API_URL=https://api:8080
       - TCP_PORT=9000
 
   tcp-agent:
@@ -34,34 +18,18 @@ services:
       - TCP_SERVER_HOST=tcp-server
       - TCP_SERVER_PORT=9000
       - SERVER_ID=demo-agent-01
-    # Scale: docker-compose up --scale tcp-agent=3
+    # Scale: docker compose up --scale tcp-agent=3
 
-  # --- Person 2: REST API ---
+  # --- REST API + GraphQL ---
   api:
     build: ./api
     ports:
       - "8080:8080"
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
     environment:
-      - RABBITMQ_HOST=rabbitmq
       - DATABASE_URL=sqlite:///./data/watchdog.db
     volumes:
       - api-data:/app/data
       - ./certs:/app/certs:ro
-
-  # --- Person 3: Alert worker + WebSocket ---
-  alert-worker:
-    build: ./alerts
-    ports:
-      - "8765:8765"
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-      - WS_PORT=8765
 
   # --- Dashboard ---
   dashboard:
@@ -70,7 +38,6 @@ services:
       - "3000:80"
     depends_on:
       - api
-      - alert-worker
 
 volumes:
   api-data:

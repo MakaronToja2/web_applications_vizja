@@ -1,82 +1,100 @@
 """
-TCP Heartbeat Server — Person 1
+TCP Heartbeat Server
 
 Listens on TCP_PORT for heartbeat messages from agents.
-Parses the custom protocol and publishes events to RabbitMQ.
+Parses the custom protocol and forwards data to the REST API via HTTPS.
 
 Protocol format (text, pipe-delimited):
   Client -> Server:  HEARTBEAT|<server_id>|<timestamp>|<cpu>|<mem>|<status>
   Server -> Client:  ACK|<server_id>
 
-RabbitMQ exchange: monitor.events (topic)
-  Routing keys: server.heartbeat, server.down, server.up
-  Message body (JSON): {"server_id": "...", "cpu": 45, "mem": 72, "status": "OK", "timestamp": "..."}
+API endpoints called:
+  POST /api/heartbeat  — forward heartbeat data
+  POST /api/status     — report status change (DOWN/UP)
 """
 
 import socket
 import threading
-import json
 import time
 import os
-import pika
+import requests
+import urllib3
 
-RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "localhost")
+# Disable SSL warnings for self-signed cert
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+API_URL = os.environ.get("API_URL", "https://localhost:8080")
 TCP_PORT = int(os.environ.get("TCP_PORT", 9000))
 HEARTBEAT_TIMEOUT = 30  # seconds before marking server as DOWN
 
 # Track last heartbeat time per server_id
 last_heartbeat: dict[str, float] = {}
+# Track which servers are currently marked as DOWN
+servers_down: set[str] = set()
 
 
-def setup_rabbitmq():
-    """Connect to RabbitMQ and declare the topic exchange."""
-    connection = pika.BlockingConnection(
-        pika.ConnectionParameters(host=RABBITMQ_HOST)
-    )
-    channel = connection.channel()
-    channel.exchange_declare(exchange="monitor.events", exchange_type="topic")
-    return connection, channel
+def send_heartbeat_to_api(data: dict):
+    """Forward heartbeat data to REST API."""
+    try:
+        requests.post(
+            f"{API_URL}/api/heartbeat",
+            json=data,
+            verify=False,
+            timeout=5,
+        )
+    except requests.exceptions.RequestException as e:
+        print(f"Error sending heartbeat to API: {e}")
 
 
-def publish_event(channel, routing_key: str, data: dict):
-    """Publish a JSON event to the monitor.events exchange."""
-    channel.basic_publish(
-        exchange="monitor.events",
-        routing_key=routing_key,
-        body=json.dumps(data),
-    )
+def send_status_change(server_id: str, status: str):
+    """Report a status change (DOWN/UP) to REST API."""
+    try:
+        requests.post(
+            f"{API_URL}/api/status",
+            json={"server_id": server_id, "status": status},
+            verify=False,
+            timeout=5,
+        )
+    except requests.exceptions.RequestException as e:
+        print(f"Error sending status change to API: {e}")
 
 
-def handle_client(conn: socket.socket, addr, channel):
+def handle_client(conn: socket.socket, addr):
     """Handle a single TCP client connection."""
-    # TODO: Person 1 — implement protocol parsing
+    # TODO: — implement protocol parsing
     #
-    # 1. Receive data from conn (conn.recv(1024))
-    # 2. Decode and split by '|'
-    # 3. Validate message format
+    # 1. Receive data from conn in a loop (conn.recv(1024))
+    # 2. Decode and split by '|':
+    #    parts = message.strip().split("|")
+    #    command, server_id, timestamp, cpu, mem, status = parts
+    # 3. Validate: command should be "HEARTBEAT"
     # 4. Update last_heartbeat[server_id] = time.time()
-    # 5. Publish to RabbitMQ: publish_event(channel, "server.heartbeat", {...})
-    # 6. Send ACK back: conn.sendall(f"ACK|{server_id}\n".encode())
-    # 7. Handle connection errors gracefully
+    # 5. If server was in servers_down → it's back UP:
+    #    servers_down.discard(server_id)
+    #    send_status_change(server_id, "UP")
+    # 6. Forward to API: send_heartbeat_to_api({...})
+    # 7. Send ACK back: conn.sendall(f"ACK|{server_id}\n".encode())
+    # 8. Handle connection errors gracefully (try/except)
     pass
 
 
-def check_timeouts(channel):
+def check_timeouts():
     """Periodically check for servers that missed their heartbeat."""
-    # TODO: Person 1 — implement timeout detection
+    # TODO: — implement timeout detection
     #
-    # Run in a loop (e.g., every 5 seconds):
+    # Run in a loop (every 5 seconds):
     # 1. For each server_id in last_heartbeat:
     #    if time.time() - last_heartbeat[server_id] > HEARTBEAT_TIMEOUT:
-    #      publish_event(channel, "server.down", {"server_id": server_id, ...})
-    #      remove from last_heartbeat (or mark as already notified)
+    #      if server_id not in servers_down:
+    #        servers_down.add(server_id)
+    #        send_status_change(server_id, "DOWN")
+    #        print(f"Server {server_id} is DOWN")
+    # 2. time.sleep(5)
     pass
 
 
 def main():
     """Start the TCP server."""
-    _, channel = setup_rabbitmq()
-
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind(("0.0.0.0", TCP_PORT))
@@ -84,13 +102,13 @@ def main():
     print(f"TCP server listening on port {TCP_PORT}")
 
     # Start timeout checker in background thread
-    timeout_thread = threading.Thread(target=check_timeouts, args=(channel,), daemon=True)
+    timeout_thread = threading.Thread(target=check_timeouts, daemon=True)
     timeout_thread.start()
 
     while True:
         conn, addr = server_socket.accept()
         print(f"Connection from {addr}")
-        client_thread = threading.Thread(target=handle_client, args=(conn, addr, channel), daemon=True)
+        client_thread = threading.Thread(target=handle_client, args=(conn, addr), daemon=True)
         client_thread.start()
 
 

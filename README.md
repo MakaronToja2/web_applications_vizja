@@ -16,34 +16,30 @@ docker compose up
 
 | Usługa | Port | URL |
 |--------|------|-----|
-| REST API (HTTPS) | 8080 | https://localhost:8080/docs |
+| REST API + GraphQL (HTTPS) | 8080 | https://localhost:8080/docs |
+| GraphQL Playground | 8080 | https://localhost:8080/graphql |
 | Serwer TCP (heartbeat) | 9000 | — |
-| WebSocket (alerty) | 8765 | ws://localhost:8765 |
 | Dashboard | 3000 | http://localhost:3000 |
-| RabbitMQ Panel | 15672 | http://localhost:15672 (guest/guest) |
 
 ## Struktura projektu
 
-| Folder | Osoba | Opis |
-|--------|-------|------|
-| `tcp_server/` | Osoba 1 | Serwer TCP — odbiera heartbeaty (sockety) |
-| `tcp_agent/` | Osoba 1 | Klient TCP — symuluje monitorowane serwery |
-| `api/` | Osoba 2 | REST API + HTTPS (FastAPI) |
-| `alerts/` | Osoba 3 | Konsumer RabbitMQ + serwer WebSocket |
-| `dashboard/` | Wspólne | Prosty panel webowy |
-| `docs/` | Wspólne | Dokumentacja architektury |
+| Folder | Opis |
+|--------|------|
+| `tcp_server/` | Serwer TCP — odbiera heartbeaty (sockety) |
+| `tcp_agent/` | Klient TCP — symuluje monitorowane serwery |
+| `api/` | REST API + HTTPS (FastAPI) + baza danych |
+| `api/graphql/` | GraphQL schema + silnik alertów (Strawberry) |
+| `dashboard/` | Panel webowy (GraphQL + WebSocket) |
+| `docs/` | Dokumentacja architektury |
 
 ## Testowanie poszczególnych komponentów
 
 ```bash
-# Tylko RabbitMQ + warstwa TCP
-docker compose up rabbitmq tcp-server tcp-agent
+# API + TCP
+docker compose up api tcp-server tcp-agent
 
-# Tylko RabbitMQ + API
-docker compose up rabbitmq api
-
-# Tylko RabbitMQ + alerty
-docker compose up rabbitmq alert-worker
+# Tylko API (z GraphQL playground)
+docker compose up api
 
 # Skalowanie agentów (symulacja wielu serwerów)
 docker compose up --scale tcp-agent=5

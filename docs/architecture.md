@@ -86,12 +86,13 @@ graph TD
 6. **Dashboard** subskrybuje alerty przez **GraphQL Subscription** (WebSocket) — dostaje je natychmiast
 7. **Dashboard** odpytuje dane o serwerach i regułach przez **GraphQL query/mutation** (HTTPS)
 
-## Podział ról
+## Struktura projektu
 
-| Folder | Osoba | Opis |
-|--------|-------|------|
-| `tcp_server/`, `tcp_agent/` | Osoba 1 | Serwer i klient TCP (sockety), wywołania REST API |
-| `api/` | Osoba 2 | REST API (FastAPI) + HTTPS + SQLite + modele bazodanowe + dokumentacja |
-| `api/graphql/` | Osoba 3 | GraphQL schema (Strawberry) — queries, mutations, subscriptions + silnik alertów + dashboard |
-| `dashboard/` | Osoba 3 | Panel webowy (GraphQL + WebSocket) |
-| `docs/` | Osoba 2 | Dokumentacja architektury, analiza komunikacji |
+| Folder | Opis |
+|--------|------|
+| `tcp_server/` | Serwer TCP — odbiera heartbeaty, wywołuje REST API |
+| `tcp_agent/` | Klient TCP — symuluje monitorowane serwery |
+| `api/` | REST API (FastAPI) + HTTPS + SQLite + modele bazodanowe |
+| `api/graphql/` | GraphQL schema (Strawberry) — queries, mutations, subscriptions + silnik alertów |
+| `dashboard/` | Panel webowy (GraphQL + WebSocket) |
+| `docs/` | Dokumentacja architektury, analiza komunikacji |

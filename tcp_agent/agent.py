@@ -1,5 +1,5 @@
 """
-TCP Heartbeat Agent — Person 1
+TCP Heartbeat Agent
 
 Simulates a monitored server by sending periodic heartbeats to the TCP server.
 
@@ -35,7 +35,7 @@ def create_heartbeat_message() -> str:
 
 def main():
     """Connect to TCP server and send heartbeats in a loop."""
-    # TODO: Person 1 — implement the agent
+    # TODO: implement the agent
     #
     # 1. Create a TCP socket: socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # 2. Connect to (TCP_SERVER_HOST, TCP_SERVER_PORT)
