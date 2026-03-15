@@ -1,12 +1,53 @@
-# Specyfikacja REST API
+# Specyfikacja API
+
+## REST API
 
 Bazowy URL: `https://localhost:8080`
 
 Interaktywna dokumentacja (Swagger): `https://localhost:8080/docs`
 
-## Endpointy
+### Endpointy REST (używane przez Serwer TCP)
 
-### POST /api/servers
+#### POST /api/heartbeat
+Odbiór heartbeata z serwera TCP.
+
+**Request:**
+```json
+{
+    "server_id": "web-01",
+    "cpu": 45,
+    "mem": 72,
+    "status": "OK",
+    "timestamp": "2024-03-14T12:00:00"
+}
+```
+
+**Response (200):**
+```json
+{"ok": true}
+```
+
+---
+
+#### POST /api/status
+Zmiana statusu serwera (UP/DOWN) — wywoływane przez serwer TCP przy wykryciu awarii.
+
+**Request:**
+```json
+{
+    "server_id": "web-01",
+    "status": "DOWN"
+}
+```
+
+**Response (200):**
+```json
+{"ok": true}
+```
+
+---
+
+#### POST /api/servers
 Rejestracja nowego serwera do monitorowania.
 
 **Request:**
@@ -31,107 +72,151 @@ Rejestracja nowego serwera do monitorowania.
 }
 ```
 
-**Błędy:**
-- `409` — serwer o tym `server_id` już istnieje
-
 ---
 
-### GET /api/servers
+#### GET /api/servers
 Lista wszystkich zarejestrowanych serwerów z aktualnym statusem.
 
-**Response (200):**
-```json
-[
-    {
-        "id": 1,
-        "server_id": "web-01",
-        "name": "Serwer webowy produkcyjny",
-        "status": "UP",
-        "last_heartbeat": "2024-03-14T12:05:00",
-        "cpu": 45.0,
-        "mem": 72.0,
-        "created_at": "2024-03-14T12:00:00"
-    }
-]
-```
-
 ---
 
-### GET /api/servers/{server_id}
+#### GET /api/servers/{server_id}
 Szczegóły pojedynczego serwera.
 
-**Response (200):** Jak wyżej (pojedynczy obiekt).
+---
 
-**Błędy:**
-- `404` — nie znaleziono serwera
+#### DELETE /api/servers/{server_id}
+Usunięcie serwera z monitorowania. **Response:** `204 No Content`
 
 ---
 
-### DELETE /api/servers/{server_id}
-Usunięcie serwera z monitorowania.
+## GraphQL API
 
-**Response:** `204 No Content`
+Endpoint: `https://localhost:8080/graphql`
 
-**Błędy:**
-- `404` — nie znaleziono serwera
+Playground (GraphiQL): `https://localhost:8080/graphql`
 
----
+### Queries
 
-### GET /api/servers/{server_id}/history?limit=100
-Historia heartbeatów dla danego serwera.
+```graphql
+# Lista serwerów
+query {
+  servers {
+    serverId
+    name
+    status
+    cpu
+    mem
+    lastHeartbeat
+  }
+}
 
-**Parametry query:**
-- `limit` (int, domyślnie 100) — maksymalna liczba wyników
+# Pojedynczy serwer
+query {
+  server(serverId: "web-01") {
+    serverId
+    status
+    cpu
+    mem
+  }
+}
 
-**Response (200):**
-```json
-[
-    {
-        "id": 42,
-        "server_id": "web-01",
-        "cpu": 45.0,
-        "mem": 72.0,
-        "status": "OK",
-        "timestamp": "2024-03-14T12:05:00"
-    }
-]
+# Reguły alertów
+query {
+  alertRules {
+    id
+    name
+    metric
+    operator
+    threshold
+    enabled
+  }
+}
+
+# Ostatnie alerty
+query {
+  alerts(limit: 20) {
+    id
+    ruleName
+    serverId
+    message
+    timestamp
+  }
+}
+
+# Statystyki
+query {
+  stats {
+    totalServers
+    serversUp
+    serversDown
+    totalAlerts
+  }
+}
 ```
 
----
+### Mutations
 
-### GET /api/servers/{server_id}/incidents
-Lista incydentów (awarii i przywróceń) dla serwera.
+```graphql
+# Utwórz regułę alertu
+mutation {
+  createAlertRule(
+    name: "Wysokie CPU"
+    metric: "cpu"
+    operator: ">"
+    threshold: 90
+  ) {
+    id
+    name
+  }
+}
 
-**Response (200):**
-```json
-[
-    {
-        "id": 1,
-        "server_id": "web-01",
-        "event_type": "DOWN",
-        "timestamp": "2024-03-14T12:10:30"
-    },
-    {
-        "id": 2,
-        "server_id": "web-01",
-        "event_type": "UP",
-        "timestamp": "2024-03-14T12:11:00"
-    }
-]
+# Utwórz regułę dla konkretnego serwera
+mutation {
+  createAlertRule(
+    name: "Web-01 RAM"
+    metric: "mem"
+    operator: ">"
+    threshold: 85
+    serverId: "web-01"
+  ) {
+    id
+  }
+}
+
+# Usuń regułę
+mutation {
+  deleteAlertRule(id: 1)
+}
+
+# Włącz/wyłącz regułę
+mutation {
+  toggleAlertRule(id: 1, enabled: false) {
+    id
+    enabled
+  }
+}
 ```
 
----
+### Subscriptions (WebSocket)
 
-### GET /api/stats
-Zagregowane statystyki systemu.
+```graphql
+# Alerty w czasie rzeczywistym
+subscription {
+  alertTriggered {
+    serverId
+    ruleName
+    message
+    timestamp
+  }
+}
 
-**Response (200):**
-```json
-{
-    "total_servers": 5,
-    "servers_up": 3,
-    "servers_down": 1,
-    "servers_unknown": 1,
-    "total_incidents": 12
+# Zmiany statusu serwerów
+subscription {
+  serverStatusChanged {
+    serverId
+    status
+    cpu
+    mem
+  }
 }
 ```

@@ -4,8 +4,8 @@
 
 | Warstwa | Zastosowanie w projekcie |
 |---------|--------------------------|
-| **Aplikacji** | HTTP/REST (FastAPI), WebSocket, AMQP (RabbitMQ), własny protokół heartbeat |
-| **Transportowa** | TCP — wszystkie połączenia (sockety, HTTP, WebSocket, AMQP) |
+| **Aplikacji** | HTTP/REST (FastAPI), GraphQL (Strawberry), WebSocket (GraphQL Subscriptions), własny protokół heartbeat |
+| **Transportowa** | TCP — wszystkie połączenia (sockety, HTTP, WebSocket) |
 | **Internetowa** | IPv4 — sieć wewnętrzna Docker + localhost |
 | **Dostępu do sieci** | Docker bridge network / Ethernet |
 
@@ -16,30 +16,30 @@
 | Połączenie | Opis |
 |-----------|------|
 | **TCP heartbeat** (Agent ↔ Serwer TCP) | Utrzymywane połączenie TCP — serwer śledzi stan każdego agenta (ostatni heartbeat, czy żyje). Zerwanie połączenia = potencjalna awaria. |
-| **WebSocket** (Alert Worker ↔ Dashboard) | Utrzymywane połączenie dwukierunkowe. Serwer przechowuje listę podłączonych klientów i broadcastuje do nich alerty. |
-| **AMQP** (Usługi ↔ RabbitMQ) | Kanały AMQP to stanowe połączenia — RabbitMQ śledzi konsumentów, kolejki i potwierdzenia dostarczenia. |
+| **GraphQL Subscription** (API ↔ Dashboard) | Utrzymywane połączenie WebSocket — serwer przechowuje listę subskrybentów i pushuje do nich eventy o zmianach statusu i alertach w czasie rzeczywistym. |
 
 ### Komunikacja bezstanowa (stateless)
 
 | Połączenie | Opis |
 |-----------|------|
-| **HTTP REST API** | Każde żądanie HTTP jest niezależne — serwer nie przechowuje stanu między żądaniami. Klient wysyła pełne informacje w każdym requeście. |
+| **HTTP REST API** (Serwer TCP → API) | Każde żądanie HTTP jest niezależne — serwer TCP wywołuje `POST /api/heartbeat` per heartbeat. |
+| **GraphQL Query/Mutation** (Dashboard → API) | Pojedyncze zapytania HTTPS — każde niezależne. Dashboard pyta o listę serwerów, tworzy reguły alertów. |
 
 ## Porty i protokoły
 
 | Port | Protokół | Usługa | Stanowy? | Warstwa |
 |------|----------|--------|----------|---------|
 | 9000 | TCP (własny protokół) | Serwer heartbeat | Tak | Transportowa + Aplikacji |
-| 8080 | HTTPS (HTTP + TLS) | REST API | Nie | Aplikacji |
-| 8765 | WebSocket (WS) | Serwer alertów | Tak | Aplikacji |
-| 5672 | AMQP | RabbitMQ (broker) | Tak | Aplikacji |
-| 15672 | HTTP | RabbitMQ panel zarządzania | Nie | Aplikacji |
+| 8080 | HTTPS (HTTP + TLS) | REST API + GraphQL | Nie (query/mutation) / Tak (subscription) | Aplikacji |
+| 8080 | WebSocket (WSS) | GraphQL Subscriptions | Tak | Aplikacji |
 | 3000 | HTTP | Dashboard (Nginx) | Nie | Aplikacji |
 
 ## Bezpieczeństwo
 
-- REST API działa po **HTTPS** z certyfikatem self-signed (TLS/SSL)
+- REST API i GraphQL działają po **HTTPS** z certyfikatem self-signed (TLS/SSL)
+- GraphQL Subscriptions używają **WSS** (WebSocket Secure) — ten sam certyfikat
 - Szyfrowanie zapewnia poufność i integralność danych przesyłanych między dashboardem a API
+- Komunikacja Serwer TCP → API również po HTTPS (wewnątrz sieci Docker)
 - Certyfikat generowany poleceniem:
   ```bash
   openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=localhost"
@@ -71,3 +71,12 @@ Serwer → Klient:  ACK|<server_id>\n
 3. Serwer odpowiada ACK po każdym heartbeatcie
 4. Jeśli serwer nie otrzyma heartbeata przez 30s → oznacza serwer jako DOWN
 5. Połączenie utrzymywane do momentu zamknięcia agenta lub awarii sieci
+
+## GraphQL vs REST — dlaczego oba?
+
+| | REST API | GraphQL |
+|---|---|---|
+| **Kto używa** | Serwer TCP (wewnętrzne wywołania) | Dashboard (frontend) |
+| **Do czego** | Prosty zapis danych: `POST /api/heartbeat`, `POST /api/status` | Elastyczne zapytania, zarządzanie regułami alertów, subskrypcje real-time |
+| **Dlaczego** | Serwer TCP nie potrzebuje elastyczności — zawsze wysyła te same dane | Dashboard potrzebuje różnych widoków + real-time push (subscriptions) |
+| **Typ komunikacji** | Bezstanowa (request-response) | Bezstanowa (query/mutation) + Stanowa (subscription/WebSocket) |

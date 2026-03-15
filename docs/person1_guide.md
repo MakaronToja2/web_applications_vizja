@@ -4,7 +4,7 @@
 
 Dwa komponenty w Pythonie używające **czystych socketów** (moduł `socket` z biblioteki standardowej):
 
-1. **Serwer TCP** (`tcp_server/server.py`) — odbiera heartbeaty od agentów i publikuje zdarzenia do RabbitMQ
+1. **Serwer TCP** (`tcp_server/server.py`) — odbiera heartbeaty od agentów i przekazuje dane do REST API
 2. **Agent TCP** (`tcp_agent/agent.py`) — symuluje monitorowany serwer, wysyła heartbeaty co 10s
 
 ## Protokół komunikacji
@@ -31,64 +31,56 @@ Pola:
 | `mem` | int | Użycie RAM w % (0-100) |
 | `status` | string | Zawsze `OK` (agent żyje) |
 
-## Format wiadomości RabbitMQ
+## Jak przekazać dane do REST API
 
-Serwer TCP po odebraniu heartbeata publikuje do RabbitMQ:
-
-- **Exchange:** `monitor.events` (typ: `topic`)
-- **Routing key:** `server.heartbeat`, `server.down`, lub `server.up`
-- **Body (JSON):**
-
-```json
-{
-    "server_id": "web-01",
-    "cpu": 45,
-    "mem": 72,
-    "status": "OK",
-    "timestamp": "2024-03-14T12:00:00"
-}
-```
-
-Dla zdarzeń `server.down` / `server.up`:
-```json
-{
-    "server_id": "web-01",
-    "status": "DOWN",
-    "timestamp": "2024-03-14T12:00:30"
-}
-```
-
-## Jak połączyć się z RabbitMQ (pika)
+Zamiast RabbitMQ — serwer TCP bezpośrednio wywołuje REST API po HTTPS.
 
 ```python
-import pika
+import requests
 import json
 import os
+import urllib3
 
-RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "localhost")
+# Wyłącz ostrzeżenia o self-signed cert
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-connection = pika.BlockingConnection(
-    pika.ConnectionParameters(host=RABBITMQ_HOST)
-)
-channel = connection.channel()
-channel.exchange_declare(exchange="monitor.events", exchange_type="topic")
+API_URL = os.environ.get("API_URL", "https://api:8080")
 
-# Publikacja zdarzenia
-def publish_event(routing_key, data):
-    channel.basic_publish(
-        exchange="monitor.events",
-        routing_key=routing_key,
-        body=json.dumps(data),
-    )
+def send_heartbeat_to_api(data):
+    """Wyślij heartbeat do REST API."""
+    try:
+        requests.post(
+            f"{API_URL}/api/heartbeat",
+            json=data,
+            verify=False,  # self-signed cert
+            timeout=5,
+        )
+    except requests.exceptions.RequestException as e:
+        print(f"Error sending to API: {e}")
 
-# Przykład użycia
-publish_event("server.heartbeat", {
+def send_status_change(server_id, status):
+    """Zgłoś zmianę statusu (DOWN/UP) do REST API."""
+    try:
+        requests.post(
+            f"{API_URL}/api/status",
+            json={"server_id": server_id, "status": status},
+            verify=False,
+            timeout=5,
+        )
+    except requests.exceptions.RequestException as e:
+        print(f"Error sending status to API: {e}")
+
+# Przykład użycia po odebraniu heartbeata:
+send_heartbeat_to_api({
     "server_id": "web-01",
     "cpu": 45,
     "mem": 72,
     "status": "OK",
     "timestamp": "2024-03-14T12:00:00"
 })
+
+# Przykład gdy serwer padł:
+send_status_change("web-01", "DOWN")
 ```
 
 ## Logika wykrywania awarii
@@ -96,33 +88,40 @@ publish_event("server.heartbeat", {
 W serwerze TCP uruchom wątek (`threading.Thread`) który co 5 sekund sprawdza:
 - Dla każdego `server_id` w `last_heartbeat`:
   - Jeśli `time.time() - last_heartbeat[server_id] > 30` → serwer nie żyje
-  - Opublikuj `server.down` do RabbitMQ
-  - Gdy serwer wróci (pierwszy heartbeat po oznaczeniu DOWN) → opublikuj `server.up`
+  - Wywołaj `send_status_change(server_id, "DOWN")`
+  - Gdy serwer wróci (pierwszy heartbeat po oznaczeniu DOWN) → `send_status_change(server_id, "UP")`
 
 ## Jak testować
 
 ```bash
-# Uruchom tylko swoją część + RabbitMQ
-docker-compose up rabbitmq tcp-server tcp-agent
+# Uruchom swoją część + API
+docker compose up api tcp-server tcp-agent
 
 # Sprawdź logi
-docker-compose logs -f tcp-server
+docker compose logs -f tcp-server
 
-# Panel RabbitMQ — sprawdź czy wiadomości docierają
-# http://localhost:15672 (login: guest / hasło: guest)
-# Zakładka "Exchanges" → monitor.events → powinny być wiadomości
+# Sprawdź czy heartbeaty dochodzą do API:
+# Otwórz https://localhost:8080/docs → GET /api/servers
+# Powinny pojawić się zarejestrowane serwery
 
 # Skalowanie agentów
-docker-compose up --scale tcp-agent=3
+docker compose up --scale tcp-agent=3
 
 # Symulacja awarii — zatrzymaj agenta
-docker-compose stop tcp-agent
-# Po 30s serwer powinien opublikować server.down
+docker compose stop tcp-agent
+# Po 30s serwer TCP powinien wysłać POST /api/status z DOWN
 ```
 
 ## Pliki do edycji
 
-- `tcp_server/server.py` — uzupełnij funkcje `handle_client()` i `check_timeouts()`
-- `tcp_agent/agent.py` — uzupełnij funkcję `main()`
+- `tcp_server/server.py` — uzupełnij `handle_client()` i `check_timeouts()`
+- `tcp_agent/agent.py` — uzupełnij `main()`
+
+## Dodatkowe zależności
+
+Dodaj `requests` do `tcp_server/requirements.txt`:
+```
+requests
+```
 
 Szkielet kodu z komentarzami TODO jest już przygotowany. Wystarczy uzupełnić wskazane miejsca.

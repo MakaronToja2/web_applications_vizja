@@ -4,41 +4,34 @@
 
 Watchdog to system monitorowania dostępności serwerów. Składa się z:
 - **Agentów TCP** — zainstalowanych na monitorowanych serwerach, wysyłających cykliczne heartbeaty
-- **Serwera TCP** — odbierającego heartbeaty i wykrywającego awarie
-- **Kolejki wiadomości (RabbitMQ)** — do asynchronicznej komunikacji między usługami
-- **REST API (HTTPS)** — do zarządzania serwerami i przeglądania danych
-- **Serwera WebSocket** — do powiadomień w czasie rzeczywistym
-- **Dashboardu** — panelu webowego wyświetlającego status serwerów i alerty
+- **Serwera TCP** — odbierającego heartbeaty i przekazującego dane do REST API
+- **REST API (HTTPS)** — do zapisywania danych i zarządzania serwerami (FastAPI)
+- **GraphQL API** — do elastycznych zapytań i subskrypcji real-time (Strawberry)
+- **Silnika alertów** — ewaluacja reguł zdefiniowanych przez użytkownika (np. "CPU > 90%")
+- **Dashboardu** — panel webowy z alertami na żywo
 
 ## Diagram architektury
 
 ```mermaid
 graph TD
-    subgraph Monitorowane serwery
-        A1[Agent TCP #1<br/>klient socket]
-        A2[Agent TCP #2<br/>klient socket]
-        A3[Agent TCP #N<br/>klient socket]
+    subgraph "Monitorowane serwery"
+        A1["Agent TCP #1<br/>klient socket"]
+        A2["Agent TCP #2<br/>klient socket"]
+        A3["Agent TCP #N<br/>klient socket"]
     end
 
     subgraph "Serwer TCP :9000"
-        TS[Serwer TCP<br/>Python socket<br/>— odbiera heartbeaty<br/>— wykrywa awarie]
+        TS["Serwer TCP<br/>Python socket<br/>— odbiera heartbeaty<br/>— wykrywa awarie<br/>— wywołuje REST API"]
     end
 
-    subgraph "Message Broker :5672"
-        RMQ[RabbitMQ<br/>Exchange: monitor.events<br/>topic exchange]
-    end
-
-    subgraph "REST API :8080"
-        API[FastAPI + HTTPS<br/>— CRUD serwerów<br/>— historia heartbeatów<br/>— statystyki]
-        DB[(SQLite<br/>servers / heartbeats / incidents)]
-    end
-
-    subgraph "Alert Worker :8765"
-        AW[Konsumer RabbitMQ<br/>+ Serwer WebSocket<br/>— przetwarza alerty<br/>— broadcast do klientów]
+    subgraph "Backend :8080"
+        API["FastAPI + HTTPS<br/>— REST API (zapis danych)<br/>— GraphQL (zapytania + subskrypcje)<br/>— silnik alertów"]
+        GQL["Strawberry GraphQL<br/>— queries (serwery, historia, alerty)<br/>— mutations (reguły alertów)<br/>— subscriptions (WebSocket)"]
+        DB[("SQLite<br/>servers / heartbeats<br/>incidents / alert_rules")]
     end
 
     subgraph "Frontend :3000"
-        DASH[Dashboard<br/>Nginx + HTML/JS<br/>— lista serwerów<br/>— alerty real-time]
+        DASH["Dashboard<br/>HTML/JS<br/>— status serwerów<br/>— zarządzanie regułami alertów<br/>— alerty real-time"]
     end
 
     A1 -- "HEARTBEAT|id|ts|cpu|mem|status<br/>TCP :9000" --> TS
@@ -48,18 +41,16 @@ graph TD
     TS -- "ACK" --> A2
     TS -- "ACK" --> A3
 
-    TS -- "server.heartbeat<br/>server.down<br/>server.up<br/>AMQP" --> RMQ
-
-    RMQ -- "api_heartbeat_queue<br/>server.heartbeat / .down / .up" --> API
-    RMQ -- "alert_queue<br/>server.down / .up / .heartbeat" --> AW
+    TS -- "POST /api/heartbeat<br/>HTTPS" --> API
 
     API --> DB
-    API -- "HTTPS GET/POST<br/>JSON" --> DASH
-    AW -- "WebSocket ws://<br/>JSON alerts" --> DASH
+    API --> GQL
+    GQL --> DB
+    DASH -- "GraphQL query / mutation<br/>HTTPS" --> GQL
+    DASH -. "GraphQL subscription<br/>WebSocket" .-> GQL
 
-    style RMQ fill:#ff6d00,color:#fff
     style API fill:#1565c0,color:#fff
-    style AW fill:#6a1b9a,color:#fff
+    style GQL fill:#6a1b9a,color:#fff
     style TS fill:#2e7d32,color:#fff
     style DASH fill:#37474f,color:#fff
     style DB fill:#1565c0,color:#fff
@@ -69,8 +60,8 @@ graph TD
 
 | Wymaganie | Realizacja |
 |-----------|-----------|
-| **Message Queue** | RabbitMQ — asynchroniczna komunikacja między Serwerem TCP, REST API i Alert Workerem |
-| **WebSocket** | Serwer WebSocket w Alert Worker — powiadomienia real-time do dashboardu |
+| **GraphQL** | Strawberry GraphQL — queries, mutations (reguły alertów), subscriptions |
+| **WebSocket** | GraphQL Subscriptions — powiadomienia real-time o zmianach statusu i alertach |
 
 ## Użyte technologie
 
@@ -78,9 +69,9 @@ graph TD
 |-----------|-------------|
 | Serwer/Agent TCP | Python, moduł `socket` |
 | REST API | Python, FastAPI, SQLAlchemy |
+| GraphQL | Strawberry GraphQL (integracja z FastAPI) |
+| WebSocket | GraphQL Subscriptions (wbudowane w Strawberry) |
 | Baza danych | SQLite |
-| Kolejka wiadomości | RabbitMQ (AMQP) |
-| WebSocket | Python, biblioteka `websockets` |
 | Dashboard | HTML/CSS/JavaScript |
 | Konteneryzacja | Docker, Docker Compose |
 | HTTPS | Certyfikat self-signed (OpenSSL) |
@@ -88,8 +79,19 @@ graph TD
 ## Przepływ danych
 
 1. **Agent TCP** wysyła heartbeat (`HEARTBEAT|server_id|timestamp|cpu|mem|status`) do **Serwera TCP** przez socket TCP
-2. **Serwer TCP** odpowiada `ACK`, parsuje dane i publikuje zdarzenie `server.heartbeat` do **RabbitMQ**
-3. Jeśli agent nie wysyła heartbeata przez 30s → Serwer TCP publikuje `server.down`
-4. **REST API** konsumuje zdarzenia z RabbitMQ i zapisuje je do **SQLite**
-5. **Alert Worker** konsumuje zdarzenia `server.down`/`server.up` i broadcastuje je przez **WebSocket**
-6. **Dashboard** pobiera listę serwerów z REST API (HTTPS) i odbiera alerty na żywo przez WebSocket
+2. **Serwer TCP** odpowiada `ACK`, parsuje dane i wywołuje `POST /api/heartbeat` na **REST API** (HTTPS)
+3. Jeśli agent nie wysyła heartbeata przez 30s → Serwer TCP wywołuje `POST /api/status` z `status=DOWN`
+4. **REST API** zapisuje dane do **SQLite** i uruchamia **silnik alertów** — sprawdza reguły użytkownika
+5. Jeśli reguła jest spełniona (np. CPU > 90%) → tworzony jest alert i emitowany przez **GraphQL Subscription**
+6. **Dashboard** subskrybuje alerty przez **GraphQL Subscription** (WebSocket) — dostaje je natychmiast
+7. **Dashboard** odpytuje dane o serwerach i regułach przez **GraphQL query/mutation** (HTTPS)
+
+## Podział ról
+
+| Folder | Osoba | Opis |
+|--------|-------|------|
+| `tcp_server/`, `tcp_agent/` | Osoba 1 | Serwer i klient TCP (sockety), wywołania REST API |
+| `api/` | Osoba 2 | REST API (FastAPI) + HTTPS + SQLite + modele bazodanowe + dokumentacja |
+| `api/graphql/` | Osoba 3 | GraphQL schema (Strawberry) — queries, mutations, subscriptions + silnik alertów + dashboard |
+| `dashboard/` | Osoba 3 | Panel webowy (GraphQL + WebSocket) |
+| `docs/` | Osoba 2 | Dokumentacja architektury, analiza komunikacji |
