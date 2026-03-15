@@ -34,17 +34,6 @@
 | 8080 | WebSocket (WSS) | GraphQL Subscriptions | Tak | Aplikacji |
 | 3000 | HTTP | Dashboard (Nginx) | Nie | Aplikacji |
 
-## Bezpieczeństwo
-
-- REST API i GraphQL działają po **HTTPS** z certyfikatem self-signed (TLS/SSL)
-- GraphQL Subscriptions używają **WSS** (WebSocket Secure) — ten sam certyfikat
-- Szyfrowanie zapewnia poufność i integralność danych przesyłanych między dashboardem a API
-- Komunikacja Serwer TCP → API również po HTTPS (wewnątrz sieci Docker)
-- Certyfikat generowany poleceniem:
-  ```bash
-  openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=localhost"
-  ```
-
 ## Opis własnego protokołu TCP
 
 ### Format wiadomości
