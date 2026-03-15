@@ -15,7 +15,7 @@ Watchdog to system monitorowania dostępności serwerów. Składa się z:
 ```mermaid
 graph TD
     subgraph "Monitorowane serwery"
-        A1["Agent TCP #1<br/>klient socket"]y
+        A1["Agent TCP #1<br/>klient socket"]
         A2["Agent TCP #2<br/>klient socket"]
         A3["Agent TCP #N<br/>klient socket"]
     end
