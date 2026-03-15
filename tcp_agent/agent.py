@@ -6,11 +6,6 @@ Simulates a monitored server by sending periodic heartbeats to the TCP server.
 Protocol format:
   Agent -> Server:  HEARTBEAT|<server_id>|<timestamp>|<cpu>|<mem>|<status>
   Server -> Agent:  ACK|<server_id>
-
-Environment variables:
-  TCP_SERVER_HOST  — hostname of TCP server (default: localhost)
-  TCP_SERVER_PORT  — port of TCP server (default: 9000)
-  SERVER_ID        — unique identifier for this agent (default: agent-01)
 """
 
 import socket
@@ -21,7 +16,7 @@ import random
 TCP_SERVER_HOST = os.environ.get("TCP_SERVER_HOST", "localhost")
 TCP_SERVER_PORT = int(os.environ.get("TCP_SERVER_PORT", 9000))
 SERVER_ID = os.environ.get("SERVER_ID", "agent-01")
-HEARTBEAT_INTERVAL = 10  # seconds
+HEARTBEAT_INTERVAL = 10
 
 
 def create_heartbeat_message() -> str:
@@ -35,19 +30,29 @@ def create_heartbeat_message() -> str:
 
 def main():
     """Connect to TCP server and send heartbeats in a loop."""
-    # TODO: implement the agent
-    #
-    # 1. Create a TCP socket: socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # 2. Connect to (TCP_SERVER_HOST, TCP_SERVER_PORT)
-    #    - Retry with backoff if connection fails
-    # 3. In a loop:
-    #    a. Build message with create_heartbeat_message()
-    #    b. Send it: sock.sendall((message + "\n").encode())
-    #    c. Receive ACK: sock.recv(1024).decode()
-    #    d. Print status
-    #    e. Sleep HEARTBEAT_INTERVAL seconds
-    # 4. Handle disconnection — try to reconnect
-    pass
+    while True:
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((TCP_SERVER_HOST, TCP_SERVER_PORT))
+            print(f"Connected to {TCP_SERVER_HOST}:{TCP_SERVER_PORT} as {SERVER_ID}")
+
+            while True:
+                message = create_heartbeat_message()
+                sock.sendall((message + "\n").encode("utf-8"))
+
+                response = sock.recv(1024).decode("utf-8").strip()
+                print(f"Sent: {message} | Received: {response}")
+
+                time.sleep(HEARTBEAT_INTERVAL)
+
+        except (ConnectionRefusedError, ConnectionResetError, BrokenPipeError, OSError) as e:
+            print(f"Connection error: {e}. Retrying in 5s...")
+            time.sleep(5)
+        finally:
+            try:
+                sock.close()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
